@@ -67,6 +67,8 @@ Here are some keyboard shortcuts, though:
 ## Build
 Windows users double click `MAKE.bat` file. OSX/Linux users can run `sh MAKE.bat`.
 
+Alternatively, download any binary release from the [bin/ folder](bin/).
+
 ## Credits
 Andre Weissflog, for their many single-header libraries! (Zlib licensed). Peter Sovietov and wermipls, for their accurate AY chip emulator (MIT licensed). Ulrich Doewich and Colin Pitrat, for their uPD765A floppy disk controller (GPL licensed). Marat Fayzullin for their WD1793/FDI controllers (Propietary). Potapov Vsevolod Viktorovich for their rusfaq website. Andrew Owen and Geoff Wearmouth for their custom ROMs. Simon Owen for their DSK technical websites. Santiago Romero, Philip Kendall, James McKay for their FOSS emulators. Damian Vila for their BESCII truetype font (CC-1.0). lalaoopybee, for their lovely tube shader. Günter Woigk, Juan Carlos González Amestoy and David Colmenero for their floppy sound recordings. The ZX Spectrum Discord folks. All the ZX community!
 

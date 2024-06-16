@@ -12,7 +12,7 @@
 // glue sequential tzx/taps in zips (side A) -> side 1 etc)
 // sequential tzx/taps/dsks do not reset model
 
-#define SPECTRAL "v0.9"
+#define SPECTRAL "v1.0 wip"
 
 #define README \
 "Spectral can be configured with a mouse.\n\n" \
