@@ -15,6 +15,8 @@ rgba* thumbnail(const byte *VRAM_, int len, unsigned downfactor, int ZXFlashFlag
     #define SCANLINE_(y) \
         ((((((y)%64) & 0x38) >> 3 | (((y)%64) & 0x07) << 3) + ((y)/64) * 64) << 5)
 
+    rgba *ZXPalette = ZXPalettes[0]; // [5] B/W palette for a good noir effect!
+
     for( int y = 0; y < 192; y += downfactor ) {
         // paper
         const byte *pixels=VRAM_+SCANLINE_(y);
@@ -87,12 +89,14 @@ int zxdb_compare_by_name(const void *arg1, const void *arg2) { // @fixme: roman
     char *title2 = strchr(year2,  '|')+1;
     char *alias2 = strchr(title2, '|')+1;
 
-    if( *tab == '#' ) {
-        if( *alias1 != '|' && (isdigit(*alias1) || ispunct(*alias1)) ) title1 = alias1;
-        if( *alias2 != '|' && (isdigit(*alias2) || ispunct(*alias2)) ) title2 = alias2;
-    } else {
-        if( *title1 != *tab && *alias1 == *tab ) title1 = alias1;
-        if( *title2 != *tab && *alias2 == *tab ) title2 = alias2;
+    if( tab ) {
+        if( *tab == '#' ) {
+            if( *alias1 != '|' && (isdigit(*alias1) || ispunct(*alias1)) ) title1 = alias1;
+            if( *alias2 != '|' && (isdigit(*alias2) || ispunct(*alias2)) ) title2 = alias2;
+        } else {
+            if( *title1 != *tab && *alias1 == *tab ) title1 = alias1;
+            if( *title2 != *tab && *alias2 == *tab ) title2 = alias2;
+        }
     }
 
     return strcmpi(title1, title2);
@@ -138,7 +142,7 @@ bool zxdb_load(const char *id, int ZX_MODEL) {
                     else if( strstr(model, "+2") )       boot(ZX = 200, ~0u);
                     else if( strstr(model, "USR0") )     boot(ZX = 128, ~0u); // @fixme
                     else if( strstr(model, "128") )      boot(ZX = 128, ~0u);
-                    else if( strstr(model, "48") )       boot(ZX = 48 + 80 * (atoi(ZXDB2.ids[1]) >= 1987), ~0u);
+                    else if( strstr(model, "48") )       boot(ZX = 48 /*+ 80 * (atoi(ZXDB2.ids[1]) >= 1987)*/, ~0u);
                     else                                 boot(ZX = 16, ~0u);
                 }
 
@@ -226,13 +230,14 @@ const byte* screens[65536][2][4];
 unsigned short screens_len[65536];
 
 
-thread_ptr_t worker;
-thread_queue_t queue;
+thread_ptr_t worker, worker2;
+thread_queue_t queue, queue2;
 struct queue_t {
     zxdb z;
     char *url;
 };
 void* queue_values[144]; // 12x12 thumbnails max
+void* queue_values2[144]; // 12x12 thumbnails max
 struct queue_t *queue_t_new(zxdb z,const char *url) {
     struct queue_t *q = malloc(sizeof(struct queue_t));
     q->z = zxdb_dup(z);
@@ -246,7 +251,7 @@ double worker_progress() {
 }
 int worker_fn( void* userdata ) {
     for(;;) {
-        void* item = thread_queue_consume(&queue, THREAD_QUEUE_WAIT_INFINITE);
+        void* item = thread_queue_consume((thread_queue_t*)userdata, THREAD_QUEUE_WAIT_INFINITE);
         struct queue_t *q = (struct queue_t*)item;
         printf("queue recv %s\n", q->url);
 
@@ -274,19 +279,19 @@ int worker_fn( void* userdata ) {
                 rgba *bitmap = (rgba*)stbi_load_from_memory(bin, len, &ix, &iy, &in, 4);
                 if( bitmap ) {
                     screens[id][0][1] = screens[id][1][1] = (const byte*)ui_resize(bitmap, ix, iy, 256/2, 192/2, 1);
-                    screens[id][0][2] = screens[id][1][2] = (const byte*)ui_resize(bitmap, ix, iy, 256/4, 192/4, 1);
-                    screens[id][0][3] = screens[id][1][3] = (const byte*)ui_resize(bitmap, ix, iy, 256/8, 192/8, 1);
+                    screens[id][0][2] = screens[id][1][2] = (const byte*)ui_resize(bitmap, ix, iy, 256/4, 192/4, 0);
+                    screens[id][0][3] = screens[id][1][3] = (const byte*)ui_resize(bitmap, ix, iy, 256/8, 192/8, 0);
                     stbi_image_free(bitmap);
                 } else {
                     bitmap = thumbnail(bin, len, 1, 0); ix = 256, iy = 192;
                     screens[id][0][1] = (const byte*)ui_resize(bitmap, ix, iy, 256/2, 192/2, 1);
-                    screens[id][0][2] = (const byte*)ui_resize(bitmap, ix, iy, 256/4, 192/4, 1);
-                    screens[id][0][3] = (const byte*)ui_resize(bitmap, ix, iy, 256/8, 192/8, 1);
+                    screens[id][0][2] = (const byte*)ui_resize(bitmap, ix, iy, 256/4, 192/4, 0);
+                    screens[id][0][3] = (const byte*)ui_resize(bitmap, ix, iy, 256/8, 192/8, 0);
                     free(bitmap);
                     bitmap = thumbnail(bin, len, 1, 1); ix = 256, iy = 192;
                     screens[id][1][1] = (const byte*)ui_resize(bitmap, ix, iy, 256/2, 192/2, 1);
-                    screens[id][1][2] = (const byte*)ui_resize(bitmap, ix, iy, 256/4, 192/4, 1);
-                    screens[id][1][3] = (const byte*)ui_resize(bitmap, ix, iy, 256/8, 192/8, 1);
+                    screens[id][1][2] = (const byte*)ui_resize(bitmap, ix, iy, 256/4, 192/4, 0);
+                    screens[id][1][3] = (const byte*)ui_resize(bitmap, ix, iy, 256/8, 192/8, 0);
                     free(bitmap);
                 }
 
@@ -301,14 +306,28 @@ int worker_fn( void* userdata ) {
     return 0;
 }
 int worker_push(const zxdb z, const char *url, int ms) {
-    // init
-    int capacity = sizeof(queue_values) / sizeof(queue_values[0]);
-    if(!worker) thread_queue_init(&queue, capacity, queue_values, 0);
-    if(!worker) thread_detach( worker = thread_init(worker_fn, NULL, "worker_fn", THREAD_STACK_SIZE_DEFAULT) );
-    // 
-    if( thread_queue_count(&queue) < capacity )
-        if( thread_queue_produce(&queue, queue_t_new(z,url), ms ) ) // THREAD_QUEUE_WAIT_INFINITE );
-            return printf("queue send %s\n", url), 1;
+    unsigned hash = url ? fnv1a(url, strlen(url)) : (unsigned)(uintptr_t)url;
+    unsigned bucket = hash & 1;
+
+    if( hash & 1 ) {
+        // init
+        int capacity = sizeof(queue_values) / sizeof(queue_values[0]);
+        if(!worker)  thread_queue_init(&queue, capacity, queue_values, 0);
+        if(!worker)  thread_detach( worker = thread_init(worker_fn, &queue, "worker_fn", THREAD_STACK_SIZE_DEFAULT) );
+
+        if( thread_queue_count(&queue) < capacity )
+            if( thread_queue_produce(&queue, queue_t_new(z,url), ms ) ) // THREAD_QUEUE_WAIT_INFINITE );
+                return printf("queue send1 %s\n", url), 1;
+    } else {
+        // init2
+        int capacity2 = sizeof(queue_values2) / sizeof(queue_values2[0]);
+        if(!worker2) thread_queue_init(&queue2, capacity2, queue_values2, 0);
+        if(!worker2) thread_detach( worker2 = thread_init(worker_fn, &queue2, "worker_fn2", THREAD_STACK_SIZE_DEFAULT) );
+
+        if( thread_queue_count(&queue2) < capacity2 )
+            if( thread_queue_produce(&queue2, queue_t_new(z,url), ms ) ) // THREAD_QUEUE_WAIT_INFINITE );
+                return printf("queue send2 %s\n", url), 1;
+    }
     return 0;
 }
 
@@ -418,17 +437,21 @@ int selected, scroll;
 char* game_browser_v1() {
 //  tigrBlitTint(app, app, 0,0, 0,0, _320,_240, tigrRGB(128,128,128));
 
+    int clicked = 0;
     enum { ENTRIES = (_240/11)-4 };
     static char *buffer = 0; if(!buffer) { buffer = malloc(65536); /*rescan();*/ }
     if (!numgames) return 0;
     if( scroll < 0 ) scroll = 0;
     for( int i = scroll; i < numgames && i < scroll+ENTRIES; ++i ) {
         const char starred = dbgames[i] >> 8 ? (char)(dbgames[i] >> 8) : ' ';
-        sprintf(buffer, "%c %3d.%s%s\n", starred, i+1, i == selected ? " > ":" ", 1+strrchr(games[i], DIR_SEP) );
-        window_printxycol(ui, buffer, 1, 3+(i-scroll-1),
-            (dbgames[i] & 0x7F) == 0 ? tigrRGB(255,255,255) : // untested
-            (dbgames[i] & 0x7F) == 1 ? tigrRGB(64,255,64) :   // ok
-            (dbgames[i] & 0x7F) == 2 ? tigrRGB(255,64,64) : tigrRGB(255,192,64) ); // bug:warn
+        sprintf(buffer, "%c%c %3d.%s%s\n", 
+            (dbgames[i] & 0x7F) == 0 ? '\x7' :        // untested
+            (dbgames[i] & 0x7F) == 1 ? '\x4' :        // ok
+            (dbgames[i] & 0x7F) == 2 ? '\x2' : '\x6', // bug:warn
+            starred, i+1, i == selected ? " > ":" ", 1+strrchr(games[i], DIR_SEP) );
+
+        ui_at(ui, 1*11, (3+(i-scroll-1)) * 11 );
+        if( ui_click(NULL, buffer) ) selected = i, clicked = 1;
     }
 
     int up = 0, pg = 0;
@@ -475,9 +498,10 @@ char* game_browser_v1() {
     selected = selected < scroll ? scroll : selected >= (scroll + ENTRIES + 1) ? scroll + ENTRIES : selected;
     selected = selected < 0 ? 0 : selected >= numgames ? numgames-1 : selected;
 
-
+    // filter
         static int chars[16] = {0}, chars_count = -1;
         #define RESET_INPUTBOX() do { memset(chars, 0, sizeof(int)*16); chars_count = -1; } while(0)
+    #if 0
         int any = 0;
         // Grab any chars and add them to our buffer.
         for(;;) {
@@ -521,6 +545,7 @@ char* game_browser_v1() {
                 }
             }
         }
+    #endif
 
     if( window_pressed(app, TK_CONTROL) || window_trigger(app, TK_SPACE) ) {
         int update = 0;
@@ -548,7 +573,7 @@ char* game_browser_v1() {
         }
     }
 
-    if( window_trigger(app, TK_RETURN) ) {
+    if( window_trigger(app, TK_RETURN) || clicked ) {
         RESET_INPUTBOX();
         return games[selected];
     }
@@ -566,6 +591,8 @@ char* game_browser_v2() {
     if (!numgames) return 0;
     if( scroll < 0 ) scroll = 0;
 #endif
+
+    int selection[2] = {0};
 
     // handle input
     struct mouse m = mouse();
@@ -607,29 +634,50 @@ char* game_browser_v2() {
     ui_at(ui, 11-4-2, UPPER_SPACING);
 
 //  static const char *tab = 0;
-    static const char *tabs = "\x15#ABCDEFGHIJKLMNOPQRSTUVWXYZ\x12\x17\x18\x19";
+    static const char *tabs = "\x15\x17#ABCDEFGHIJKLMNOPQRSTUVWXYZ\x12\x18";
 
-    do_once tab = tabs+2; // 'A'
+    do_once tab = tabs+3; // 'A'
 
     for(int i = 0; tabs[i]; ++i) {
-        if( (ui_at(ui, ui_x+4+(i&1), ui_y), ui_button(NULL, va("%c%c", (tab && tabs[i] == *tab) ? 5 : 7, tabs[i])) )) {
+        if( (ui_at(ui, ui_x+4+8*(i==1), ui_y), ui_button(NULL, va("%c%c", (tab && tabs[i] == *tab) ? 5 : 7, tabs[i])) )) {
             if( ui_hover ) {
                 /**/ if(tabs[i] == '\x15') ui_notify( "-Resume-" );
-                else if(tabs[i] == '\x12') ui_notify( "-List Bookmarks-" );
-                else if(tabs[i] == '\x17') ui_notify( "-Browse local folder-" );
+                else if(tabs[i] == '\x17') ui_notify( "-Browse local folder-\nClick again to change folder" );
+                else if(tabs[i] == '\x12') ui_notify( "-List Bookmarks-\nClick again to change thumbnails view" );
                 else if(tabs[i] == '\x18') ui_notify( "-Search game-" );
-                else if(tabs[i] == '\x19') ui_notify( "-Toggle thumbnails-" );
-                else if(tabs[i] ==    '#') ui_notify( "-List other games-" );
-                else                       ui_notify( va("-List %c games-", tabs[i]) );
+//              else if(tabs[i] == '\x19') ui_notify( "-Toggle thumbnails-" );
+                else if(tabs[i] ==    '#') ui_notify( "-List other games-\nClick again to change thumbnails view" );
+                else                       ui_notify( va("-List %c games-\nClick again to change thumbnails view", tabs[i]) );
             }
             if( ui_click ) {
+                if( tab == (tabs+i) ) {
+                    // reclick
+                    if( *tab == '\x17' ) {
+                        extern int cmdkey;
+                        cmdkey = 'SCAN';
+                    } else {
+                        int next[] = { [0]=3,[3]=6,[6]=12,[12]=0 };
+                        thumbnails = next[thumbnails];
+                    }
+                }
                 tab = tabs + i;
             }
         }
     }
 
-    if( left )  if(!tab) tab = tabs; else if(*tab-- == '#')    tab = tabs + 28;
-    if( right ) if(!tab) tab = tabs; else if(*tab++ == '\x12') tab = tabs + 01;
+#if 0
+    if( left )  if(!tab) tab = tabs; else if(*tab-- == '#') tab = tabs + 29;
+    if( right ) if(!tab) tab = tabs; else if(*tab++ == 'Z') tab = tabs +  3;
+#else
+    if(!tab) tab = tabs;
+    if( tab >= (tabs+2) && tab <= (tabs+29) ) {
+    if( left  ) if(*tab-- ==    '#') tab = tabs + 29;
+    if( right ) if(*tab++ == '\x12') tab = tabs +  2;
+    } else {
+    if( tab < (tabs+ 2) ) tab = left ? tabs + 29 : right ? tabs + 2 : tab;
+    if( tab > (tabs+29) ) tab = left ? tabs + 29 : right ? tabs + 2 : tab;
+    }
+#endif
 
     static const char *prev = 0;
     if( tab && prev != tab ) {
@@ -641,28 +689,55 @@ char* game_browser_v2() {
         }
         else
         if( *tab == '\x18' ) {
-            if( zxdb_load(prompt("Game search", "Either \"#zxdb-id\", \"*text*search*\", or \"/file.ext\"", "0"), 0) ) {
-                active = 0;
+            tab = 0;
+            prev = 0;
 
-                tab = 0;
-                prev = 0;
-                //list = 0;
-                //list_num = 0;
-                return NULL;
+            const char *search = prompt("Game search", "Either \"#zxdb-id\", \"*text*search*\", or \"/file.ext\" path", "");
+            if( search && search[0] ) {
+                int found = 0;
+
+                if( !found && zxdb_load(search, 0) ) {
+                    found = 1;
+                }
+
+                // most plain numbers like `1143` are likely zxdb-ids (except 1942 and 1943 probably).
+                // so we silently convert 1143 to `#1143` instead to force a zxdb-id search
+                if( !found && !strcmp(search, va("%d", atoi(search))) && zxdb_load(va("#%s", search), 0) ) {
+                    found = 1;
+                }
+
+                // try a partial match "*search*" as well. 
+                // reasoning for this: "jack" will fail, but "*jack*" will deliver jack the ripper or jack the nipper at least
+                if( !found && zxdb_load(va("*%s*",search), 0) ) {
+                    found = 1;
+                }
+
+                if( found ) {
+                    active = 0;
+                    //list = 0;
+                    //list_num = 0;
+                    return NULL;
+                }
+
+                alert("Not found");
             }
         }
         else
         if( *tab == '\x17' ) {
             extern int cmdkey;
+
+            do_once
             cmdkey = 'SCAN';
 
-            ZX_BROWSER = 1; // decay to file browser
+            //ZX_BROWSER = 1; // decay to file browser
 
-            tab = 0;
-            prev = 0;
+            prev = tab;
+            return NULL;
+            //tab = 0;
+            //prev = 0;
             //list = 0;
             //list_num = 0;
-            return NULL;
+            //return NULL;
         }
         else
         if( *tab == '\x19' ) {
@@ -682,7 +757,7 @@ char* game_browser_v2() {
 
         // search & sort
         free(list), list = 0;
-        if( *tab != '\x12' ) {
+        if( tab && *tab != '\x12' ) {
             list = map_multifind(&zxdb2, va("%c*", *tab == '#' ? '?' : *tab), &list_num);
         }
         else {
@@ -737,6 +812,8 @@ char* game_browser_v2() {
     tigrLine(ui, 0, progress_y, progress_x, progress_y, ui_ff);
 
     if( !tab ) return NULL;
+
+    if( *tab == '\x17' ) return game_browser_v1(); // NULL;
 
     ui_at(ui, 0, UPPER_SPACING+2*LINE_HEIGHT);
 
@@ -805,7 +882,13 @@ char* game_browser_v2() {
             /*"\2"*/"\f\x12\f\x12\f\x12", // 1 1 0
             /*"\2"*/"\f\x12\f\x12\f\x12", // 1 1 1
         };
-        static const char *colors = "\7\2\6\4";
+        static char colors[] = "\7\2\6\4";
+
+        extern zxdb ZXDB;
+        int loaded = ZXDB.ids[0] && atoi(ZXDB.ids[0]) == atoi(zx_id);
+        if( loaded ) selection[0] = ui_x, selection[1] = ui_y;
+        colors[0] = loaded ? '\5' : '\7';
+
         int dbid = atoi(zx_id);
         int vars = cache_get(dbid);
         int star = (vars >> 0) & 0x0f; assert(star <= 3);
@@ -822,12 +905,12 @@ char* game_browser_v2() {
 
         if( !thumbnails ) {
 
-            ui_label(va("  %3d. ", i+1));
+            ui_label(va("%c  %3d.%s", colors[0], i+1, loaded ? ">":" "));
 
             if( ui_click("-Toggle bookmark-", va("%c\f", "\x10\x12"[!!star])) )
                 star = !star;
 
-            if( ui_click("-Toggle compatiblity flags-\n\2fail\7, \6warn\7, \4good", va("%c%s", colors[flag], flag == 0 || flag == 3 ? "":"")) )
+            if( ui_click("-Toggle compatibility flags-\n\2fail\7, \6warn\7, \4good", va("%c%s", colors[flag], flag == 0 ? "":"")) )
                 flag = (flag + 1) % 4;
 
             cache_set(dbid, (vars & 0xff00) | (flag << 4) | star);
@@ -896,7 +979,7 @@ char* game_browser_v2() {
                 if( ui_click(NULL, va("%c\f", "\x10\x12"[!!star])) )
                     star = !star;
 
-                if( ui_click(NULL, va("%c%s", colors[flag], flag == 0 || flag == 3 ? "":"")) )
+                if( ui_click(NULL, va("%c%s", colors[flag], flag == 0 ? "":"")) )
                     flag = (flag + 1) % 4;
 
                 cache_set(dbid, (vars & 0xff00) | (flag << 4) | star);
@@ -906,7 +989,7 @@ char* game_browser_v2() {
                 }
                 else
                 if( m.x <= (x+10+10-4) && m.y <= (y+11) ) {
-                    ui_notify("-Toggle compatiblity flags-\n\2fail\7, \6warn\7, \4good");
+                    ui_notify("-Toggle compatibility flags-\n\2fail\7, \6warn\7, \4good");
                 }
                 else {
                     mouse_cursor(2);
@@ -926,7 +1009,7 @@ char* game_browser_v2() {
                         "","",
                         "","",
                     };
-                    const char *id = va("%.*s\n%s", zx_id_len, zx_id, anims4[ (atoi(zx_id) + frame4) & 3 ] );
+                    const char *id = va("%x\n%s", atoi(zx_id), anims4[ (atoi(zx_id) + frame4) & 3 ] );
                     if( ui_click(id, id) ) clicked = 1;
                 }
             }

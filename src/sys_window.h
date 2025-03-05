@@ -9,6 +9,7 @@
 #define window_printxycol(win, text, x,y, col) tigrPrint(win, tfont, (x)*11,(y)*11, col, "%s", text)
 #define window_pressed(win, keycode) (!!(tigrKeyDown(win, keycode) || tigrKeyHeld(win, keycode)))
 #define window_trigger(win, keycode) (!!tigrKeyDown(win, keycode))
+#define window_released(win, keycode) (!!tigrKeyUp(win, keycode))
 #define window_title(win, title) tigrTitle(win,title)
 void    window_override_icons();
 
@@ -18,6 +19,12 @@ int window_keyrepeat(window *app, unsigned char vk) {
     table[vk] *= !!window_pressed(app, vk);
     table[vk] += !!window_pressed(app, vk);
     return table[vk] == 1 || table[vk] > 32;
+}
+int window_longpress(window *app, unsigned char vk) {
+    static int table[256] = {0}; // @fixme: table[num_windows][256];
+    table[vk] *= !!window_pressed(app, vk);
+    table[vk] += !!window_pressed(app, vk);
+    return table[vk] == 50; // 1s
 }
 
 char*   prompt(const char *title, const char *caption, const char *defaults );
@@ -45,7 +52,11 @@ void window_override_icons() {
 
 // Set the window icon for every window in your app (including MessageBox() calls and assertion failures) instead of just your primary window.
 static HICON appIcon; // = (HICON)GetClassLong(hWnd, GCL_HICON);
-static LRESULT window_create_callback(int type, WPARAM wparam, LPARAM lparam) {
+static LRESULT 
+#ifndef _WIN64
+__stdcall
+#endif
+window_create_callback(int type, WPARAM wparam, LPARAM lparam) {
     if (type == HCBT_CREATEWND) {
         SendMessage((HWND)wparam, WM_SETICON, ICON_SMALL, (LPARAM)appIcon);
         SendMessage((HWND)wparam, WM_SETICON, ICON_BIG, (LPARAM)appIcon);
@@ -87,13 +98,20 @@ int (alert)(const char *title, const char *body) {
 
     HWND hwndParent = GetActiveWindow(); // = GetForegroundWindow();
 
-//    PostMessage(hwndParent, WM_SYSCOMMAND, SC_MINIMIZE, 0);
-    ShowWindow(hwndParent, SW_HIDE);
+    bool is_fullscreen = 0;
+    RECT r; is_fullscreen = GetWindowRect(hwndParent, &r) && !r.top && !r.left;
+
+    if( is_fullscreen ) {
+        // PostMessage(hwndParent, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+        ShowWindow(hwndParent, SW_HIDE);
+    }
 
     MessageBoxA(hwndParent, body, title, MB_OK|MB_SYSTEMMODAL);
 
-//    PostMessage(hwndParent, WM_SYSCOMMAND, SC_RESTORE, 0);
-    ShowWindow(hwndParent, SW_SHOW);
+    if( is_fullscreen ) {
+        // PostMessage(hwndParent, WM_SYSCOMMAND, SC_RESTORE, 0);
+        ShowWindow(hwndParent, SW_SHOW);
+    }
 
 //#elif is(ems)
 //    emscripten_run_script(va("alert('%s')", body));

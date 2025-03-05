@@ -16,10 +16,12 @@ typedef unsigned int   rgba;
 
 #ifdef _MSC_VER
 #define bswap16  _byteswap_ushort
+#define bswap32  _byteswap_ulong
 #define bswap64  _byteswap_uint64
 #define __thread __declspec(thread)
 #else
 #define bswap16 __builtin_bswap16
+#define bswap32 __builtin_bswap32
 #define bswap64 __builtin_bswap64
 #endif
 
@@ -53,7 +55,7 @@ typedef int RECT;
 #endif
 
 // leading and trailing zeros count. UB if x == 0
-#ifndef __GNUC__
+#if defined _MSC_VER && !defined __clang__
 #include <immintrin.h>
 #define __builtin_clz(x)   _lzcnt_u32(x)
 #define __builtin_clzll(x) _lzcnt_u64(x)
@@ -66,3 +68,15 @@ typedef int RECT;
 #define __builtin_safe_clzll(x) ((x) ? __builtin_clzll(x) : 64)
 #define __builtin_safe_ctz(x)   ((x) ? __builtin_ctz(x)   : 32)
 #define __builtin_safe_ctzll(x) ((x) ? __builtin_ctzll(x) : 64)
+
+
+#define ifdef(sym,t,...)  ifdef_##sym(t,__VA_ARGS__)
+#define ifndef(sym,t,...) ifndef_##sym(t,__VA_ARGS__)
+
+#ifdef _WIN32
+#define ifdef_win32(t,...)  t
+#define ifndef_win32(t,...) __VA_ARGS__
+#else
+#define ifndef_win32(t,...)  t
+#define ifdef_win32(t,...) __VA_ARGS__
+#endif

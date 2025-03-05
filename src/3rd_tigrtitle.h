@@ -4,7 +4,9 @@ char* tigrTitle(Tigr *win, const char *title) {
 #ifdef __APPLE__
 
 #elif defined _WIN32
-        SetWindowTextA((HWND)(win->handle), title);
+        wchar_t *widen(const char *);
+        // SetWindowTextA((HWND)(win->handle), title);
+        SetWindowTextW((HWND)(win->handle), widen(title));
 #else
         XTextProperty prop;
         int result = Xutf8TextListToTextProperty(dpy, (char**)&title, 1, XUTF8StringStyle, &prop);

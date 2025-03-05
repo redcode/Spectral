@@ -307,6 +307,7 @@ int tigrTouch(Tigr *bmp, TigrTouchPoint* points, int maxPoints);
 // tigrKeyDown tests for the initial press, tigrKeyHeld repeats each frame.
 int tigrKeyDown(Tigr *bmp, int key);
 int tigrKeyHeld(Tigr *bmp, int key);
+int tigrKeyUp(Tigr *bmp, int key); //< @r-lyeh
 
 // Reads character input for a window.
 // Returns the Unicode value of the last key pressed, or 0 if none.
@@ -3061,6 +3062,15 @@ int tigrKeyDown(Tigr* bmp, int key) {
     return win->keys[k] && !win->prev[k];
 }
 
+int tigrKeyUp(Tigr* bmp, int key) { //< @r-lyeh
+    TigrInternal* win;
+    int k = tigrWinVK(key);
+    if (GetFocus() != bmp->handle)
+        return 0;
+    win = tigrInternal(bmp);
+    return !win->keys[k] && win->prev[k];
+}
+
 int tigrKeyHeld(Tigr* bmp, int key) {
     TigrInternal* win;
     int k = tigrWinVK(key);
@@ -4206,6 +4216,13 @@ int tigrKeyDown(Tigr* bmp, int key) {
     return (win->keys[key] != 0) && (win->prev[key] == 0);
 }
 
+int tigrKeyUp(Tigr* bmp, int key) { //< @r-lyeh
+    TigrInternal* win;
+    assert(key < 256);
+    win = tigrInternal(bmp);
+    return (win->keys[key] == 0) && (win->prev[key] != 0);
+}
+
 int tigrKeyHeld(Tigr* bmp, int key) {
     TigrInternal* win;
     assert(key < 256);
@@ -4736,11 +4753,21 @@ int tigrKeyDown(Tigr* bmp, int key) {
     TigrInternal* win;
     assert(key < 256);
     win = tigrInternal(bmp);
-    return win->keys[key];
+    return win->keys[key] && !win->prev[key]; //< @r-lyeh
+}
+
+int tigrKeyUp(Tigr* bmp, int key) { //< @r-lyeh
+    TigrInternal* win;
+    assert(key < 256);
+    win = tigrInternal(bmp);
+    return !win->keys[key] && win->prev[key];
 }
 
 int tigrKeyHeld(Tigr* bmp, int key) {
-    return tigrKeyDown(bmp, key);
+    TigrInternal* win;
+    assert(key < 256);
+    win = tigrInternal(bmp);
+    return win->keys[key]; //< @r-lyeh
 }
 
 int tigrReadChar(Tigr* bmp) {
@@ -5096,6 +5123,13 @@ int tigrKeyDown(Tigr* bmp, int key) {
     assert(key < 256);
     win = tigrInternal(bmp);
     return win->keys[key] && !win->prev[key];
+}
+
+int tigrKeyUp(Tigr* bmp, int key) {
+    TigrInternal* win;
+    assert(key < 256);
+    win = tigrInternal(bmp);
+    return !win->keys[key] && win->prev[key];
 }
 
 int tigrKeyHeld(Tigr* bmp, int key) {
@@ -6103,6 +6137,13 @@ int tigrKeyDown(Tigr* bmp, int key) {
     assert(key < 256);
     win = tigrInternal(bmp);
     return win->keys[key] && !win->prev[key];
+}
+
+int tigrKeyUp(Tigr* bmp, int key) { //< @r-lyeh
+    TigrInternal* win;
+    assert(key < 256);
+    win = tigrInternal(bmp);
+    return !win->keys[key] && win->prev[key];
 }
 
 int tigrKeyHeld(Tigr* bmp, int key) {

@@ -362,6 +362,27 @@ if (tam==65535) sig-=49151;
     return 1;
 }
 
+
+void pok_apply(const char *pok) { // :POKE8,38373,39,0:POKE8,38374,256,3
+    while(*pok) {
+        while(!isdigit(*pok)) pok++;
+
+        int bank, addr, value, defaults;
+        int args = sscanf(pok, "%d,%d,%d,%d", &bank, &addr, &value, &defaults);
+        if( args == 4 ) {
+            if( value == 256 )
+            value = (byte)atoi(prompt("Enter value", "", va("%d",defaults)));
+
+            if( bank & 8 )
+            WRITE8(addr, value);
+            else
+            RAM_BANK(bank&7)[addr & 0x3FFF] = value;
+        }
+
+        while(*pok && *pok != ':') ++pok;
+    }
+}
+
 int pok_load(const byte *src, int len) {
     /*
     NInfinite lives
@@ -385,31 +406,35 @@ int pok_load(const byte *src, int len) {
     */
     if( *src != 'N' ) return 0; // not a .pok file
 
+    ui_dialog_new();
+    ui_dialog_option(0,"-Select Cheat-\n",NULL,0,NULL);
+    ui_dialog_separator();
+
+    char pokes[256] = {0};
     char trainer[256] = {0};
     char line[256] = {0};
     while( strchr("NMZY", *src) && sscanf(src, "%[^\r\n]", line) > 0 ) {
         src += strlen(line);
         while( strchr("\r\n", *src) ) ++src;
 
-        if( line[0] == 'N' ) { if(trainer[0]) alert(trainer); strcpy(trainer, line+1); continue; }
-        if( line[0] == 'Y' ) { if(trainer[0]) alert(trainer); return 1; }
+        if( line[0] == 'N' ) { if(trainer[0]) ui_dialog_option(1,va("%s\n",trainer),NULL,'POKE',pokes); strcpy(trainer, line+1); pokes[0] = 0; continue; }
+        if( line[0] == 'Y' ) { if(trainer[0]) ui_dialog_option(1,va("%s\n",trainer),NULL,'POKE',pokes); ui_dialog_separator(), ui_dialog_option(1,"Cancel\n",NULL,0,NULL); return 1; }
 
-        int bank, addr, val, defaults;
-        if( 4 != sscanf(line+1, "%d %d %d %d", &bank, &addr, &val, &defaults) ) break;
+        int bank, addr, value, defaults;
+        if( 4 != sscanf(line+1, "%d %d %d %d", &bank, &addr, &value, &defaults) ) break;
 
         // int current = bank & 8 ? READ8(addr) : RAM_BANK(bank&7)[addr & 0x3FFF];
         // if( current != defaults ) { alert("poke mismatch"); continue; }
 
-        extern Tigr *app;
-        if( val == 256 ) val = (byte)atoi(prompt(trainer, "", va("%d",defaults))), printf("prompt: %d\n", val), trainer[0] = '\0';
+        enum { disallow_prompts = 1 };
+        if( disallow_prompts )
+        if( value == 256 ) trainer[0] = '\0';
 
-        if( bank & 8 )
-        WRITE8(addr, val);
-        else
-        RAM_BANK(bank&7)[addr & 0x3FFF] = val;
+        strcat(pokes,va(":%d,%d,%d,%d",bank,addr,value,defaults));
     }
 
     puts(".pok error");
+    ui_dialog_new();
     return 0;
 }
 

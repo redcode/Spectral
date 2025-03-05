@@ -16,6 +16,8 @@
 #undef border
 #undef run
 
+#include "3rd_wchar.h"
+
 #if 0
 #define LUA_IMPL                              // lua544
 #define TK_END TK_END2
@@ -68,3 +70,5 @@
 //#define GAMEPAD_EXPORT 1
 #define GAMEPAD_IMPLEMENTATION
 #include "3rd_gamepad.h"
+
+#include "3rd_jompeg.h"

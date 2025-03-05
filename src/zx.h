@@ -121,9 +121,11 @@ int ZX_FREQ;
 int ZX_RF = !DEV;
 int ZX_CRT = !DEV;
 int ZX; // 16, 48, 128, 200 (+2), 210 (+2A), 300 (+3)
-int ZX_AY = 2; // 0: no, 1: ayumi, 2: flooh's, 3: both (ZX_AY is a mask)
+int ZX_AY = 2; // 0: no, 1: fast, 2: accurate
+int ZX_PALETTE = 0; // 0: own, N: others
 int ZX_TURBOROM = 0; // 0: no, 1: patch rom so loading standard tape blocks is faster (see: .tap files)
 int ZX_JOYSTICK = 3; // 0: no, 1: sinclair1, 2: sinclair2, 3: cursor/fuller/kempston/protek, 4..: other mappings
+int ZX_AUTOFIRE = 0; // 0: no, 1: slow, 2: fast
 int ZX_AUTOPLAY = 0; // yes/no: auto-plays tapes based on #FE port reads
 int ZX_AUTOSTOP = 0; // yes/no: auto-stops tapes based on #FE port reads
 int ZX_RUNAHEAD = 0; // yes/no: improves input latency
@@ -150,6 +152,9 @@ int ZX_INPUT = 1;
 
 int ZX_ALTROMS = 0; // 0:(no, original), 1:(yes, custom)
 
+const char *ZX_FN_STR[] = {"ESC","F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"};
+int ZX_FN[12+1] = {0}; // redefinable function keys. FN[0] = ESC, FN[1..12] = F1..F12
+
 #define INI_OPTIONS(X) \
     X(ZX) \
     X(ZX_RF) \
@@ -165,7 +170,11 @@ int ZX_ALTROMS = 0; // 0:(no, original), 1:(yes, custom)
     X(ZX_AUTOLOCALE) \
     X(ZX_FASTTAPE) \
     /*X(ZX_BROWSER)*/ \
-    X(ZX_ALTROMS)
+    X(ZX_ALTROMS) \
+    X(ZX_PALETTE) \
+    X(ZX_AUTOFIRE) \
+    X(ZX_FN[0]) X(ZX_FN[1]) X(ZX_FN[2]) X(ZX_FN[3]) X(ZX_FN[4]) X(ZX_FN[5]) \
+    X(ZX_FN[6]) X(ZX_FN[7]) X(ZX_FN[8]) X(ZX_FN[9]) X(ZX_FN[10]) X(ZX_FN[11]) X(ZX_FN[12])
 
 void logport(word port, byte value, int is_out);
 void outport(word port, byte value);
@@ -266,13 +275,15 @@ byte ear;
 byte spk;
 
 // ay
-ay38910_t ay;
-struct ayumi ayumi;
-byte ay_current_reg;
-int/*byte*/ ay_registers[ 16 ];
+ay38910_t ay[2];
+struct ayumi ayumi[2];
+byte ay_current_reg[2];
+int/*byte*/ ay_registers[2][ 16 ];
+int turbosound;
 void ay_reset() {
     memset(ay_registers,0,sizeof(ay_registers));
-    ay_current_reg=0;
+    memset(ay_current_reg,0,sizeof(ay_current_reg));
+    turbosound = 0;
 }
 
 // vsync
@@ -592,7 +603,7 @@ int loadfile(const char *file, int preloader) {
     }
 
     if(!ptr)
-    for( FILE *fp = fopen(file,"rb"); fp; fclose(fp), fp = 0) {
+    for( FILE *fp = fopen8(file,"rb"); fp; fclose(fp), fp = 0) {
         fseek(fp, 0L, SEEK_END);
         size = ftell(fp);
         fseek(fp, 0L, SEEK_SET);
@@ -734,6 +745,8 @@ void port_0x7ffd(byte value) {
 }
 
 void ZXJoysticks(int up, int down, int left, int right, int fire) {
+    bool within_basic = PC(cpu) < 0x4000; // && (GET_MAPPED_ROMBANK() == GET_BASIC_ROMBANK() || GET_MAPPED_ROMBANK() == GET_EDITOR_ROMBANK());
+
     // kempston/i2l + fuller, then either sinclair1 or sinclair2 or cursor/protek/agf
     int joy[][6] = {
         { 0 },
@@ -751,6 +764,13 @@ void ZXJoysticks(int up, int down, int left, int right, int fire) {
         { ZX_6,ZX_7,ZX_0,ZX_O,ZX_M,ZX_SPACE },
         { ZX_Q,ZX_W,ZX_O,ZX_K,ZX_C,ZX_SPACE },
     }, *j = joy[ZX_JOYSTICK];
+
+    // disallow cursor joystick. except while in BASIC
+    // reasoning: conflicts with many games (Gauntlet, Emlyn Hughes, etc) that use SHIFT key actively
+    if( ZX_JOYSTICK == 3 && !within_basic ) {
+        j = joy[0];
+    }
+
     kempston=0; fuller=0xff;
     if( ZX_JOYSTICK ) {
     if(left)  { kempston|=2;  fuller&=0xFF-4;   ZXKey(j[0] & 0x7f); if(j[0] & 0x80) ZXKey(ZX_SHIFT); }
@@ -939,71 +959,77 @@ void config(int ZX) {
 
 // ay
 void port_0xfffd(byte value) {
+    if( value >= 254 ) if( ZX_PENTAGON ) { turbosound = (255-value); return; }
+
+    byte *v = &ay_current_reg[turbosound];
+    int *r = ay_registers[turbosound];
+
     // select ay register
-    ay_current_reg=(value&15);
+    *v=(value&15);
     // floooh's
-    ay38910_iorq(&ay, AY38910_BDIR|AY38910_BC1|ay_current_reg<<16);
+    ay38910_iorq(&ay[turbosound], AY38910_BDIR|AY38910_BC1|((*v)<<16));
 }
 void port_0xbffd(byte value) {
+    byte *v = &ay_current_reg[turbosound];
+    int *r = ay_registers[turbosound];
+
     // update ay register
-    ay_registers[ay_current_reg]=value;
+    r[*v]=value;
     // floooh's
-    ay38910_iorq(&ay, AY38910_BDIR|value<<16);
+    ay38910_iorq(&ay[turbosound], AY38910_BDIR|value<<16);
     // ayumi
-    int *r = ay_registers;
-    switch (ay_current_reg)
+    switch (*v)
     {
     case 0:
     case 1:
-        ayumi_set_tone(&ayumi, 0, (r[1] << 8) | r[0]);
+        ayumi_set_tone(&ayumi[turbosound], 0, (r[1] << 8) | r[0]);
         break;
     case 2:
     case 3:
-        ayumi_set_tone(&ayumi, 1, (r[3] << 8) | r[2]);
+        ayumi_set_tone(&ayumi[turbosound], 1, (r[3] << 8) | r[2]);
         break;
     case 4:
     case 5:
-        ayumi_set_tone(&ayumi, 2, (r[5] << 8) | r[4]);
+        ayumi_set_tone(&ayumi[turbosound], 2, (r[5] << 8) | r[4]);
         break;
     case 6:
-        ayumi_set_noise(&ayumi, r[6]);
+        ayumi_set_noise(&ayumi[turbosound], r[6]);
         break;
     case 8:
-        ayumi_set_mixer(&ayumi, 0, r[7] & 1, (r[7] >> 3) & 1, r[8] >> 4);
-        ayumi_set_volume(&ayumi, 0, r[8] & 0xf);
+        ayumi_set_mixer(&ayumi[turbosound], 0, r[7] & 1, (r[7] >> 3) & 1, r[8] >> 4);
+        ayumi_set_volume(&ayumi[turbosound], 0, r[8] & 0xf);
         break;
     case 9:
-        ayumi_set_mixer(&ayumi, 1, (r[7] >> 1) & 1, (r[7] >> 4) & 1, r[9] >> 4);
-        ayumi_set_volume(&ayumi, 1, r[9] & 0xf);
+        ayumi_set_mixer(&ayumi[turbosound], 1, (r[7] >> 1) & 1, (r[7] >> 4) & 1, r[9] >> 4);
+        ayumi_set_volume(&ayumi[turbosound], 1, r[9] & 0xf);
         break;
     case 10:
-        ayumi_set_mixer(&ayumi, 2, (r[7] >> 2) & 1, (r[7] >> 5) & 1, r[10] >> 4);
-        ayumi_set_volume(&ayumi, 2, r[10] & 0xf);
+        ayumi_set_mixer(&ayumi[turbosound], 2, (r[7] >> 2) & 1, (r[7] >> 5) & 1, r[10] >> 4);
+        ayumi_set_volume(&ayumi[turbosound], 2, r[10] & 0xf);
         break;
     case 7:
-        ayumi_set_mixer(&ayumi, 0, r[7] & 1, (r[7] >> 3) & 1, r[8] >> 4);
-        ayumi_set_mixer(&ayumi, 1, (r[7] >> 1) & 1, (r[7] >> 4) & 1, r[9] >> 4);
-        ayumi_set_mixer(&ayumi, 2, (r[7] >> 2) & 1, (r[7] >> 5) & 1, r[10] >> 4);
+        ayumi_set_mixer(&ayumi[turbosound], 0, r[7] & 1, (r[7] >> 3) & 1, r[8] >> 4);
+        ayumi_set_mixer(&ayumi[turbosound], 1, (r[7] >> 1) & 1, (r[7] >> 4) & 1, r[9] >> 4);
+        ayumi_set_mixer(&ayumi[turbosound], 2, (r[7] >> 2) & 1, (r[7] >> 5) & 1, r[10] >> 4);
         break;
     case 11:
     case 12:
-        ayumi_set_envelope(&ayumi, (r[12] << 8) | r[11]);
+        ayumi_set_envelope(&ayumi[turbosound], (r[12] << 8) | r[11]);
         break;
     case 13:
         if (r[13] != 255) //< 255 to continue current envelope
-        ayumi_set_envelope_shape(&ayumi, r[13]);
+        ayumi_set_envelope_shape(&ayumi[turbosound], r[13]);
         break;
     }
 }
 byte inport_0xfffd(void) {
+    byte *v = &ay_current_reg[turbosound];
+    int *r = ay_registers[turbosound];
+
 //  return ay38910_iorq(&ay, 0);
-    unsigned char ay_registers_mask[ 16 ] = {
-        0xff, 0x0f, 0xff, 0x0f, 0xff, 0x0f, 0x1f, 0xff,
-        0x1f, 0x1f, 0x1f, 0xff, 0xff, 0x0f, 0xff, 0xff,
-    };
 
     if( ZX_GUNSTICK ) // magnum lightgun
-    if( ay_current_reg == 14 ) {
+    if( *v == 14 ) {
 
         // Magnum Light Phaser / Defender Light Gun for Spectrum >= 128
         // 1101 1111 bit5: trigger button (0=Pressed, 1=Released)
@@ -1011,13 +1037,13 @@ byte inport_0xfffd(void) {
 
         byte gunstick(byte);
         struct mouse m = mouse();
-        byte v = m.lb ? 0xDF : 0xEF; // set button
-        v |= 0x10 * (gunstick(0xFF) < 0xFE); // set light
+        byte val = m.lb ? 0xDF : 0xEF; // set button
+        val |= 0x10 * (gunstick(0xFF) < 0xFE); // set light
 
-        ay_registers[14] = v;
+        r[14] = val;
 
-        //printf("\t\t\tmagnum (%02x vs %02x)\n", gunstick(0xFF), v);
-        return v;
+        //printf("\t\t\tmagnum (%02x vs %02x)\n", gunstick(0xFF), val);
+        return val;
     }
 
     /* The AY I/O ports return input directly from the port when in
@@ -1025,16 +1051,20 @@ byte inport_0xfffd(void) {
     register value and the port input. So, allow for this when
     reading R14... */
 
-    if( ay_current_reg == 14 )
-    return (ay_registers[7] & 0x40 ? 0xbf & ay_registers[14] : 0xbf);
+    if( *v == 14 )
+    return (r[7] & 0x40 ? 0xbf & r[14] : 0xbf);
 
     /* R15 is simpler to do, as the 8912 lacks the second I/O port, and
     the input-mode input is always 0xff */
 
-    if( ay_current_reg == 15 && !( ay_registers[7] & 0x80 ) ) return 0xff;
+    if( *v == 15 && !( r[7] & 0x80 ) ) return 0xff;
 
     /* Otherwise return register value, appropriately masked */
-    return ay_registers[ay_current_reg] & ay_registers_mask[ay_current_reg];
+    unsigned char ay_registers_mask[ 16 ] = {
+        0xff, 0x0f, 0xff, 0x0f, 0xff, 0x0f, 0x1f, 0xff,
+        0x1f, 0x1f, 0x1f, 0xff, 0xff, 0x0f, 0xff, 0xff,
+    };
+    return r[*v] & ay_registers_mask[*v];
 }
 
 uint64_t tick1(int num_ticks, uint64_t pins, void* user_data) {
@@ -1267,12 +1297,23 @@ void sys_audio() {
     if( ZX >= 128 ) {
         static float ay_sample1 = 0, ay_sample2 = 0; enum { ayumi_fast = 0 };
         static byte even = 255; ++even;
-        if( ZX_AY & 1 ) if(!(even & 0x7F)) ay_sample1 = ayumi_render(&ayumi, ayumi_fast, 1) * 2; // 2/256 freq. even == 0 || even == 0x80
-        if( ZX_AY & 2 ) if( even & 1 ) ay38910_tick(&ay), ay_sample2 = ay.sample; // half frequency
 
         if( ZX_AY == 0 ) ay_sample1 = ay_sample2 = 0; // no ay
-        if( ZX_AY == 1 ) ay_sample2 = ay_sample1;     // ayumi only
-        if( ZX_AY == 2 ) ay_sample1 = ay_sample2;     // floooh's only
+
+        if( ZX_AY == 1 ) if( even & 1 ) {  // half frequency
+            ay38910_tick(&ay[0]), ay_sample1 = ay_sample2 = ay[0].sample;
+
+            if( ZX_PENTAGON )
+            ay38910_tick(&ay[1]), ay_sample2 = ay[1].sample;
+        }
+
+        if( ZX_AY == 2 ) if(!(even & 0x7F)) { // 2/256 freq. even == 0 || even == 0x80
+            ay_sample1 = ay_sample2 = ayumi_render(&ayumi[0], ayumi_fast, 1) * 2;
+
+            if( ZX_PENTAGON )
+            ay_sample2 = ayumi_render(&ayumi[1], ayumi_fast, 1) * 2;
+        }
+
         ay_sample = (ay_sample1 + ay_sample2) * 0.5f; // both
     }
 
@@ -1912,12 +1953,13 @@ struct quicksave {
     // audio
 #if FULL_QUICKSAVES
     beeper_t buzz;
-    struct ayumi ayumi;
-    ay38910_t ay;
+    struct ayumi ayumi[2];
+    ay38910_t ay[2];
+    int turbosound;
 #endif
     // ay
-    byte ay_current_reg;
-    int ay_registers[ 16 ];
+    byte ay_current_reg[2];
+    int ay_registers[2][ 16 ];
     // ula+
     byte ulaplus_mode;
     byte ulaplus_data;
@@ -2015,11 +2057,14 @@ void* quicksave(unsigned slot) {
     // audio
 #if FULL_QUICKSAVES
     c->buzz = buzz;
-    c->ay = ay;
-    c->ayumi = ayumi;
+    c->ay[0] = ay[0];
+    c->ay[1] = ay[1];
+    c->ayumi[0] = ayumi[0];
+    c->ayumi[1] = ayumi[1];
+    c->turbosound = turbosound;
 #endif
     // ay
-    c->ay_current_reg = ay_current_reg;
+    memcpy(c->ay_current_reg, ay_current_reg, sizeof(ay_current_reg));
     memcpy(c->ay_registers, ay_registers, sizeof(ay_registers));
     // ula+
     c->ulaplus_mode = ulaplus_mode;
@@ -2117,11 +2162,14 @@ void* quickload(unsigned slot) {
     // audio
 #if FULL_QUICKSAVES
     buzz = c->buzz;
-    ay = c->ay;
-    ayumi = c->ayumi;
+    ay[0] = c->ay[0];
+    ay[1] = c->ay[1];
+    ayumi[0] = c->ayumi[0];
+    ayumi[1] = c->ayumi[1];
+    turbosound = c->turbosound;
 #endif
     // ay
-    ay_current_reg = c->ay_current_reg;
+    memcpy(ay_current_reg, c->ay_current_reg, sizeof(ay_current_reg));
     memcpy(ay_registers, c->ay_registers, sizeof(ay_registers));
     // ula+
     ulaplus_mode = c->ulaplus_mode;
@@ -2226,8 +2274,10 @@ void reset(unsigned FLAGS) {
     beeper_reset(&buzz);
 
     ay_reset();
-    ayumi_reset(&ayumi);
-    ay38910_reset(&ay);
+    ayumi_reset(&ayumi[0]);
+    ayumi_reset(&ayumi[1]);
+    ay38910_reset(&ay[0]);
+    ay38910_reset(&ay[1]);
 
     mixer_reset();
 
@@ -2288,7 +2338,8 @@ void boot(int model, unsigned FLAGS) {
     ay_desc.tick_hz = ZX_FREQ / 2;
     ay_desc.sound_hz = AUDIO_FREQUENCY; // * 0.75; // fix: -25% speed
     ay_desc.magnitude = 1.0f;
-    ay38910_init(&ay, &ay_desc);
+    ay38910_init(&ay[0], &ay_desc);
+    ay38910_init(&ay[1], &ay_desc);
 
     // ayumi
     const int is_ym = 1; // should be 0, but 1 sounds more Speccy to me somehow (?)
@@ -2303,14 +2354,15 @@ void boot(int model, unsigned FLAGS) {
       {0.90, 0.50, 0.10}, // CBA
     };
 
-    if (!ayumi_configure(&ayumi, is_ym, 2000000 * (2000000.0 / (ZX_FREQ / 2.0)), AUDIO_FREQUENCY)) { // ayumi is AtariST based, i guess. use 2mhz clock instead
+    if (!ayumi_configure(&ayumi[0], is_ym, 2000000 * (2000000.0 / (ZX_FREQ / 2.0)), AUDIO_FREQUENCY)) { // ayumi is AtariST based, i guess. use 2mhz clock instead
         die("ayumi_configure error (wrong sample rate?)");
     }
     const double *pan = pan_modes[0];   // @fixme: ACB, mono for now
     if(ZX_PENTAGON) pan = pan_modes[0]; // @fixme: ABC, mono for now
-    ayumi_set_pan(&ayumi, 0, pan[0], eqp_stereo_on);
-    ayumi_set_pan(&ayumi, 1, pan[1], eqp_stereo_on);
-    ayumi_set_pan(&ayumi, 2, pan[2], eqp_stereo_on);
+    ayumi_set_pan(&ayumi[0], 0, pan[0], eqp_stereo_on);
+    ayumi_set_pan(&ayumi[0], 1, pan[1], eqp_stereo_on);
+    ayumi_set_pan(&ayumi[0], 2, pan[2], eqp_stereo_on);
+    ayumi[1] = ayumi[0];
 
     fdc_reset();
 

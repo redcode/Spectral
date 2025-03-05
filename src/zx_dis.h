@@ -51,9 +51,9 @@ char *regs(const char *title) {
     ptr += sprintf(ptr, "de:%04x,de'%04x,hl:%04x,hl':%04x,sp:%04x,", DE(cpu), DE2(cpu), HL(cpu), HL2(cpu), SP(cpu));
     ptr += sprintf(ptr, "%d%d%d%d%d%d%d%d\n", !!(F & 0x80), !!(F & 0x40), !!(F & 0x20), !!(F & 0x10), !!(F & 0x8), !!(F & 0x4), !!(F & 0x2), !!(F & 0x1));
     ptr += sprintf(ptr, "iff%04x,im:%04x,ir:%02x%02x,ix :%04x,iy:%04x\n", IFF1(cpu) << 8 | IFF2(cpu), IM(cpu), I(cpu),R(cpu), IX(cpu), IY(cpu));
-    ptr += sprintf(ptr, "ay reg%X ", ay_current_reg);
+    ptr += sprintf(ptr, "ay%dreg%X ", turbosound, ay_current_reg[turbosound]);
     for( int i = 0; i < 16; ++i ) 
-    ptr += sprintf(ptr, "%02x", ay_registers[i]);
+    ptr += sprintf(ptr, "%02x", ay_registers[turbosound][i]);
     ptr += sprintf(ptr, "\nmem%d%d%d%d%s", !!(page128&16), (page128&8?7:5), 2, page128&7, page128&32?"!":" "); 
     for( int i = 0; i < 16; ++i ) 
     ptr += sprintf(ptr, "%02x", (byte)( ( fnv1a(RAM_BANK(i), 0x4000) ^ 0x9c1bda7f8c872325ULL ) >> 56ULL ));

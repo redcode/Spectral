@@ -13,6 +13,7 @@
 #include "sys_network.h"
 #include "sys_embed.h"
 #include "sys_gamepad.h"
+#include "sys_ffmpeg.h"
 
 #define VALNEW(v) v
 #define VALDEL(v) 0

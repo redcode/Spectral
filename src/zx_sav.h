@@ -82,11 +82,22 @@ int export_state(FILE *fp) {
                     put16(0x00fe), put16(ZXBorderColor); // any ZX
     if( ZX >= 210 ) put16(0x1ffd), put16(page2a); // +2A, +3
     if( ZX >= 128 ) put16(0x7ffd), put16(page128); // any 128
+
+    if( ZX >= 128 ) put16(65533), put16(254); // dump 2nd ay (turbosound)
     if( ZX >= 128 ) for( int i = 0; i < 16; ++i ) { // any 128
-                        int reg = ( ay_current_reg + i + 1 ) & 15;
+                        int reg = ( ay_current_reg[1] + i + 1 ) & 15;
                         put16(0xfffd), put16(reg);
-                        put16(0xbffd), put16(ay_registers[reg]);
+                        put16(0xbffd), put16(ay_registers[1][reg]);
                     }
+
+    if( ZX >= 128 ) put16(65533), put16(255); // dump 1st ay
+    if( ZX >= 128 ) for( int i = 0; i < 16; ++i ) { // any 128
+                        int reg = ( ay_current_reg[0] + i + 1 ) & 15;
+                        put16(0xfffd), put16(reg);
+                        put16(0xbffd), put16(ay_registers[0][reg]);
+                    }
+
+    if( ZX >= 128 ) put16(65533), put16(255-turbosound); // select current ay
 
     if( ZX_ULAPLUS && ulaplus_enabled ) {
         put16(0xBF3B), put16( 64 ); // mode group

@@ -178,6 +178,7 @@ char *romanize(const char *s) {
         [0x00fc/*ü*/]='ue',[0x00dc/*Ü*/]='Ue',
         [0x00df/*ß*/]='ss',
     };
+ 
     enum { MAX_GLYPH = 0x1ef3 };
 
     char *out = va("%*.s", strlen(s)*2, ""), *p = out;

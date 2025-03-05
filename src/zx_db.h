@@ -252,9 +252,10 @@ zxdb zxdb_dup(const zxdb zxdb) {
 
 static
 zxdb zxdb_search_by_name(const char *name) {
-    if(name[0] != '#') puts(name);
-
     zxdb z = {0};
+
+    if( *name == '\0' ) return z;
+    if(name[0] != '#') puts(name);
 
     VAL *found = 0;
 
@@ -295,6 +296,12 @@ zxdb zxdb_free(zxdb z) {
 }
 
 static char *zxdb_filename2title(const char *filename) {
+
+    // early exit on foreign filenames (@fixme: utf8 games; russian? spanish? czech?)
+    for(int i = 0; filename[i]; ++i ) {
+        if( filename[i] < 0 ) return va("");
+    }
+
     // find basename
     const char *win = strrchr(filename, '\\');
     const char *unx = strrchr(filename, '/');
@@ -480,13 +487,14 @@ char* zxdb_download_(const char *url, int *len) {
         }
         else if( !strncmp(url, "/pub/", 5) ) {
             // ok, redirection
-            // mirror = "https://worldofspectrum.net/";
+            // mirror = "https://worldofspectrum.net/"; // may be outdated
+            // mirror = "https://worldofspectrum.org/"; // 200.00 MB Downloads Available
             mirror = "https://archive.org/download/World_of_Spectrum_June_2017_Mirror/World%20of%20Spectrum%20June%202017%20Mirror.zip/World%20of%20Spectrum%20June%202017%20Mirror/";
             url += 5;
         }
         else if( !strncmp(url, "/zxdb/", 6) ) {
-            mirror = "https://spectrumcomputing.co.uk/"; // ok
-            //mirror = "https://zxinfo.dk/media/"; // ok
+            //mirror = "https://spectrumcomputing.co.uk/"; // ok
+            mirror = "https://zxinfo.dk/media/"; // ok
             url += 1;
         }
         else {

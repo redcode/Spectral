@@ -1,4 +1,4 @@
-# Spectral <img src="src/res/img/noto_1f47b.png" width="5%" height="5%" />
+# Spectral <img src="../src/res/img/noto_1f47b.png" width="5%" height="5%" />
 Sinclair ZX Spectrum emulator from the 80s.
 
 ![image](https://github.com/r-lyeh/Spectral/assets/35402248/8d8ee594-fafd-4538-993f-9840bf9fc245)
@@ -16,20 +16,20 @@ Code is highly experimental and prone to change in the future. I will keep alter
 - [x] 16, 48, 128, +2, +2A, +3, Pentagon128 models.
 - [x] Issue 2/3 keyboards.
 - [x] ULA/ULA+ graphics.
-- [x] Beeper/AY chips.
+- [x] Beeper/AY chips. Turbosound (Turbo-AY).
 - [x] Kempston mouse. <!-- @todo: AMX mouse.-->
 - [x] Kempston/Fuller/Cursor/Sinclair joysticks. Gamepad support (Windows, Linux). <!-- @todo: invert joystick/mouse axes/buttons -->
 - [x] RF/CRT experience (not physically accurate though).
 - [x] TAP/TZX/PZX/CSW tapes. Z80/SNA/SZX snaps. ROM/IF2 roms.
 - [x] DSK/EDSK/TRD/SCL/FDI/MGT/IMG/HOBETA disks.
-- [x] SCR/PNG screenshots. <!-- @todo: ulaplus screenshots. video recording -->
+- [x] SCR/PNG screenshots. MP4/MPG video recordings (no sound). <!-- @todo: ulaplus screenshots -->
 - [x] ZIP/RAR/GZ archives.
 - [x] AY tunes player.
 - [x] Nec µ765/Betadisk interfaces.
 - [x] Auto load games. Auto play/stop tape. TurboROM.
 - [x] Graphical tape browser.
 - [x] 25/30/50/60Hz fps lock.
-- [x] Run-a-head.
+- [x] Run-Ahead.
 - [x] POK support. <!-- @todo: cheats finder; useful? --> 
 - [x] Gunstick, Lightgun. <!-- Cheetah Defender Lightgun, Magnum Light Phaser, Stack Light Rifle -->
 - [x] External shaders support.
@@ -60,18 +60,10 @@ Spectral can be configured with a mouse.
 
 Here are some keyboard shortcuts, though:
 - ESC: Game browser
-- F1: CPU throttle (hold)
-- F2: Start/stop tape
-- F3/F4: Rewind/advance tape
-- F5: Reload game
-- F6: Toggle input latency (Run-a-head)
-- F7: Toggle issue 2/3
-- F8: Toggle tape speed
-- F9: Toggle TV/RF (4 modes)
-- F9+SHIFT: Toggle AY core (2 modes)
-- F11/F12: Quick save/load
 - ALT+ENTER: Fullscreen
 - TAB+CURSORS (or GAMEPAD): Joysticks
+
+Hold any F1..F12 key for 2 seconds to redefine it.
 
 ## Credits
 Andre Weissflog, for their many single-header libraries! (Zlib licensed). Peter Sovietov and wermipls, for their accurate AY chip emulator (MIT licensed). Ulrich Doewich and Colin Pitrat, for their uPD765A floppy disk controller (GPL licensed). Marat Fayzullin for their WD1793/FDI controllers (Proprietary). Sean Middleditch for their gamepad code (MIT licensed). Sergey Bulba for their ay2sna tool (Public Domain). Potapov Vsevolod Viktorovich for their rusfaq website. Andrew Owen and Geoff Wearmouth for their custom ROMs. Simon Owen for their DSK technical websites. Santiago Romero, Philip Kendall, James McKay for their FOSS emulators. Damian Vila for their BESCII truetype font (CC-1.0). lalaoopybee, for their lovely tube shader. Günter Woigk, Juan Carlos González Amestoy and David Colmenero for their floppy sound recordings. The ZXDB devs. The ZX Spectrum Discord folks. All the ZX community!
@@ -87,4 +79,4 @@ This software is released into the [public domain](https://unlicense.org/). Also
 - [ZXDB](https://github.com/zxdb/ZXDB), [game maps](https://maps.speccy.cz/), [game cheats](https://www.the-tipshop.co.uk/), [RZX](https://worldofspectrum.net/RZXformat.html)[replays](https://www.rzxarchive.co.uk/) and [game longplays](https://www.youtube.com/@rzxarchive).
 - [Daily ZX videos](https://www.youtube.com/results?search_query=zx+spectrum&sp=CAI%253D), on YouTube.
 
-[![](https://github.com/r-lyeh/Spectral/actions/workflows/build.yml/badge.svg)](https://github.com/r-lyeh/Spectral/actions/workflows/build.yml)
+[![](https://github.com/r-lyeh/Spectral/actions/workflows/build.yml/badge.svg)](https://github.com/r-lyeh/Spectral/actions/workflows/build.yml) <a href="https://discord.gg/UpB7nahEFU"><img alt="Discord" src="https://img.shields.io/discord/354670964400848898?color=5865F2&label=Chat&logo=discord&logoColor=white"/></a>

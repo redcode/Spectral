@@ -20,10 +20,26 @@
 #define DIR_SEP '/'
 #define DIR_MAX MAX_PATH
 
+#ifdef _WIN32
+#define open8(path,mode)  _wopen(widen(path))
+#define fopen8(path,mode) _wfopen(widen(path),widen(mode))
+#define remove8(path)     _wremove(widen(path))
+#define rename8(path)     _wrename(widen(path))
+#define stat8(path,st)    _wstat(widen(path),st) // _stati64()
+#define stat8_t           _stat                  // struct _stati64
+#else
+#define open8(path,mode)  open(path, mode)
+#define fopen8(path,mode) fopen(path,mode)
+#define remove8(path)     remove(path)
+#define rename8(path)     rename(path)
+#define stat8(path,st)    stat(path,st)    // _stati64()
+#define stat8_t           stat_t           // struct _stati64
+#endif
+
 #include <stdio.h>
 unsigned char *readfile(const char *pathfile, int *size) {
     char *bin = 0;
-    for( FILE *fp = fopen(pathfile,"rb"); fp; fclose(fp), fp = 0) {
+    for( FILE *fp = fopen8(pathfile,"rb"); fp; fclose(fp), fp = 0) {
         fseek(fp, 0L, SEEK_END);
         size_t len = ftell(fp);
         if(size) *size = (int)len;
@@ -36,7 +52,7 @@ unsigned char *readfile(const char *pathfile, int *size) {
 }
 int writefile(const char *pathfile, const void *blob, int len) {
     int ok = 0;
-    FILE *fp = fopen(pathfile, "wb");
+    FILE *fp = fopen8(pathfile, "wb");
     if( fp ) {
         ok = fwrite(blob, len, 1, fp) == 1;
         fclose(fp);
@@ -45,12 +61,12 @@ int writefile(const char *pathfile, const void *blob, int len) {
 }
 int is_folder( const char *pathfile ) {
     // @fixme: win32+tcc wont like ending slashes in stat()
-    struct stat st;
-    return stat(pathfile, &st) >= 0 ? S_IFDIR == ( st.st_mode & S_IFMT ) : 0;
+    struct stat8_t st;
+    return stat8(pathfile, &st) >= 0 ? S_IFDIR == ( st.st_mode & S_IFMT ) : 0;
 }
 int is_file( const char *pathfile ) {
-    struct stat st;
-    return stat(pathfile, &st) >= 0;
+    struct stat8_t st;
+    return stat8(pathfile, &st) >= 0;
 }
 const char *basename( const char *pathfile ) {
     const char *a = strrchr(pathfile, '/');  a += !!a;
@@ -62,9 +78,7 @@ void cwdexe(void) {
 #ifdef __APPLE__
     char buffer[MAX_PATH]={0};
     realpath(__argv[0],buffer);
-    puts(buffer);
     if(strrchr(buffer,'/')) 1[strrchr(buffer,'/')] = '\0';
-    puts(buffer);
     chdir(buffer);
 #elif defined _WIN32
     // relocate cwd to exe folder (relative paths wont work from this point)
